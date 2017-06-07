@@ -1,41 +1,38 @@
 .include "m8515def.inc"
- 
-.def lives = r10
-.def char1 = r11
-.def char2 = r12
-.def char3 = r13
-.def level = r14
-.def rand = r15
- 
-.def temp = r16
-.def temp2 = r17
-.def temp3 = r18
-.def PA = r19
- 
-.def score_ratusan = r21
-.def score_puluhan = r22
-.def score_satuan = r23
- 
-.equ block1 = 0x60
-.equ line1 = 0x80 
-.equ line2 = 0xa0
-.equ line3 = 0xc0
-.equ line4 = 0xe0
- 
-.org $00
-rjmp MAIN
- 
-.org $01
-rjmp UP
+;defs
+	.def key   = r9
+	.def lives = r10
+	.def char1 = r11
+	.def char2 = r12
+	.def char3 = r13
+	.def level = r14
+	.def rand  = r15
 	 
-.org $02
-rjmp OK
+	.def temp  = r16
+	.def temp2 = r17
+	.def temp3 = r18
+	.def PA    = r19
+	 
+	.def score_ratusan = r21
+	.def score_puluhan = r22
+	.def score_satuan  = r23
  
+	.equ block1 = 0x60
+	.equ line1 	= 0x80 
+	.equ line2 	= 0xa0
+	.equ line3 	= 0xc0
+	.equ line4 	= 0xe0
  
+	.org $00	rjmp MAIN
+	.org $01	rjmp UP
+	.org $02	rjmp OK
+	.org $0E 	rjmp READ_KEY
+
 MAIN:
 	
 INIT_STACK:
 	ldi temp, low(RAMEND)
+	out SPL, temp
 	ldi temp, high(RAMEND)
 	out SPH, temp
 INIT_LED:
@@ -44,15 +41,27 @@ INIT_LED:
 	out DDRB, temp ; Set port B as output
 	out DDRC, temp
 	rcall INIT_LCD
+INIT_KEY:
+	ldi temp, 0xF0
+	out DDRD, temp
+	ldi temp, 0x0F
+	out PORTD, temp
 INIT_INTERRUPT:
 	ldi temp, 0b00001010
 	out MCUCR, temp
 	ldi temp, 0b11000000
 	out GICR, temp
-	sei
 INIT_TIMER:
 	ldi temp, (1<<CS00)
 	out TCCR1B, temp
+	out TCCR0, temp
+	ldi temp, (1<<OCF0)
+	out TIFR, temp
+	ldi temp, (1<<OCIE0)
+	out TIMSK, temp
+	ldi temp, 0xFF
+	out OCR0, temp
+	sei
 INIT_GAMESETTING:
 	ldi temp, $03
 	mov lives, temp
@@ -372,7 +381,6 @@ SHIFT_LINE:
 	ldi ZL, low (line4)
 	rcall SHIFT_LINE_LEFT
 	ret
-
 SET_CURSOR_POS:
 	cbi PORTA, 1
 	out PORTB, temp
@@ -388,17 +396,10 @@ INIT_RANDOM:
 	in rand, TCNT1L
 	ret
 NEXT_RANDOM:
+	mul TCNT1L, TCNT1H
 	in rand, TCNT1L
-	;push temp
-	;push temp2
-	;in temp, TCNT1L
-	;mov temp2, rand
-	;muls temp2, temp
-	;mov rand, r0
-	;pop temp2
-	;pop temp
 	ret
-	
+
 INIT_LCD:
 	cbi PORTA,1 ; CLR RS
 	ldi temp2,0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
@@ -458,11 +459,79 @@ WRITE_FAST:
 	rcall DELAY_SHORT
 	ret
 	
-UP: ldi temp, 1 
+UP: 
+	ldi temp, 1 
 	reti
- 
-OK: ldi temp, 2 
+OK: 
+	ldi temp, 2 
 	reti
+READ_KEY:
+	push r0
+	push ZH
+	push ZL
+	push temp
+
+	ldi ZH, high(2*keytable)
+	ldi ZL, low (2*keytable)
+
+	; read column 1
+	ldi temp ,0b01111111 		; PB7 = 0
+	out PORTD,temp 
+	in temp ,PIND 			; read input line
+	ori temp ,0b11110000 	; mask upper bits
+	cpi temp ,0b11111111 	; a key in this column pressed?
+	
+	brne KeyRowFound 		; key found
+	adiw ZL,4 				; column not found, point Z one row down
+
+	; read column 2
+	ldi temp ,0b10111111 		; PB6 = 0
+	out PORTD,temp 
+	in temp ,PIND 			; read again input line
+	ori temp ,0b11110000 	; mask upper bits
+	cpi temp ,0b11111111 	; a key in this column?
+	
+	brne KeyRowFound 		; key found
+	adiw ZL,4 				; column not found, another four keys down
+
+	; read column 3
+	ldi temp ,0b11011111 		; PB5 = 0
+	out PORTD,temp 
+	in temp ,PIND 			; read last line
+	ori temp ,0b11110000 	; mask upper bits
+	cpi temp ,0b11111111 	; a key in this column?
+
+	brne KeyRowFound 		; key found
+	adiw ZL,4 				; column not found, another four keys down
+	
+	; read column 4
+	ldi temp ,0b011101111 	; PB4 = 0
+	out PORTD,temp 
+	in temp ,PIND 			; read last line
+	ori temp ,0b11110000 	; mask upper bits
+	cpi temp ,0b11111111 	; a key in this column?
+
+	breq NoKey 				; unexpected: no key in this column pressed
+
+	KeyRowFound: 			; column identified, now identify row
+		lsr temp 			; shift a logic 0 in left, bit 0 to carry
+		brcc KeyFound 		; a zero rolled out, key is found
+		adiw ZL,1 			; point to next key code of that column
+		rjmp KeyRowFound 	; repeat shift
+		
+	KeyFound: 				; pressed key is found 
+		lpm 				; read key code to R0
+		mov key, r0 		; countinue key processing
+		out PORTC, key
+		;rjmp RETURN_READ_KEY
+
+	NoKey:
+	;RETURN_READ_KEY
+		pop temp
+		pop ZL
+		pop ZH
+		pop r0
+		reti
 		
 DELAY_SHORT:
 	ldi  r18, 6
@@ -492,7 +561,7 @@ DELAY_LONG:
 		ret
 		
 ENDLESS_LOOP:	rjmp ENDLESS_LOOP
-	
+
 welcome_message:
 	.db "SELAMAT DATANG DI",0
 	.db "NUMBER TILES !1!",0
@@ -516,5 +585,9 @@ stage_number:
 lines :
 .db 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F
 .db 0
- 
-;.db 0x5F, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39
+
+keytable:
+.db 0x01, 0x02, 0x03, 0x0F
+.db 0x04, 0x05, 0x06, 0x0A
+.db 0x07, 0x08, 0x09, 0x0B
+.db 0x0F, 0x00, 0x0F, 0x0F
