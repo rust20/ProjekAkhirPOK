@@ -1,5 +1,8 @@
 .include "m8515def.inc"
 ;defs
+	.def score_ratusan = r6
+	.def score_puluhan = r7
+	.def score_satuan  = r8
 	.def key   = r9
 	.def lives = r10
 	.def char1 = r11
@@ -10,18 +13,17 @@
 	 
 	.def temp  = r16
 	.def temp2 = r17
-	.def temp3 = r18
-	.def PA    = r19
+	.def temp3 = r20
+	.def PA    = r21
 	 
-	.def score_ratusan = r21
-	.def score_puluhan = r22
-	.def score_satuan  = r23
  
 	.equ block1 = 0x60
 	.equ line1 	= 0x80 
 	.equ line2 	= 0xa0
 	.equ line3 	= 0xc0
 	.equ line4 	= 0xe0
+
+	.equ screenwidth = 20
  
 	.org $00	rjmp MAIN
 	.org $01	rjmp UP
@@ -68,9 +70,11 @@ INIT_GAMESETTING:
 	ldi temp, $30
 	mov level, temp
 	
-	ldi score_ratusan, $30
-	ldi score_puluhan, $30
-	ldi score_satuan, $30
+
+	ldi temp, 0x30
+	mov score_ratusan, temp
+	mov score_puluhan, temp
+	mov score_satuan, temp
 	
 	ldi temp, $41
 	add char1, temp
@@ -200,26 +204,13 @@ GAME_START:
 	rcall CLEAR_LCD
 	rcall SHIFT_LINE_LEFT
 	rcall LOAD_GAME_DATA
-	rcall INIT_GAME_SCREEN
+	;rcall INIT_GAME_SCREEN
  
-	;cbi PORTA, 0
-	;cbi PORTA, 1
-	;cbi PORTA, 2
-	;ldi temp, 0x07
-	;out PORTB, temp
-	;sbi PORTA, 0
-	;cbi PORTA, 0
-	;ldi temp, 0x14
-	;out PORTB, temp
-	;sbi PORTA, 0
-	;cbi PORTA, 0
-
 	ldi temp3, 10
 	LOOP_GAME_START:
 		dec temp3
 		breq END_GAME_START
-		;rcall UPDATE_GAME_SCREEN
-		rcall INIT_GAME_SCREEN
+		rcall UPDATE_GAME_SCREEN
 		rjmp LOOP_GAME_START
  
 	END_GAME_START:
@@ -245,44 +236,17 @@ LOAD_GAME_DATA:
 	ret
  
 	LOAD_LINES:
-		ldi ZH, high(2*lines)
-		ldi ZL, low (2*lines)
-		ldi temp, 20
+		ldi temp, screenwidth
 		LOOP_LOAD_LINES:
 			dec temp
 			breq END_LOAD_LINES
-			lpm
-			st Y+, r0
-			adiw ZL, 1
+			ldi temp2, 0x5F
+			st Y+, temp2
 			rjmp LOOP_LOAD_LINES
 		END_LOAD_LINES:
 			ret
-SHIFT_LINE_LEFT:
-	ldi temp2, 20
  
-	mov YL, ZL
-	mov YH, ZH
-	inc YL
- 
-	LOOP_SHIFT_LINE:
-		dec temp2
-		breq END_SHIFT_LINE
-		ld temp3, Y+
-		st Z+, temp3
-		rjmp LOOP_SHIFT_LINE
- 
-	END_SHIFT_LINE:
-		rcall NEXT_RANDOM
-		mov temp, rand
-		mod10:
-			subi temp, 10
-			cpi temp, 10
-			brsh mod10
-		subi temp, -0x30
-		st -Z, temp
-		ret
- 
-INIT_GAME_SCREEN:
+UPDATE_GAME_SCREEN:
 	ldi ZH, high(line1)
 	ldi ZL, low (line1)
 	ldi temp, 0b10000000
@@ -308,13 +272,12 @@ INIT_GAME_SCREEN:
 	rcall DISPLAY_LINE 	
 	
 	rcall DELAY_LONG
-	rcall DELAY_LONG
-	rcall DELAY_LONG
+
 	rcall SHIFT_LINE
 	ret
 
 	DISPLAY_LINE:
-		ldi temp, 20
+		ldi temp, screenwidth
 		LOOP_DISPLAY_LINE:
 			dec temp
 			breq END_DISPLAY_LINE
@@ -325,62 +288,111 @@ INIT_GAME_SCREEN:
 	 
 		END_DISPLAY_LINE:
 		ret 
-UPDATE_GAME_SCREEN:
+SHIFT_LINE:
+	rcall NEXT_RANDOM
+	ldi temp, 3
+	and temp, rand
+
 	ldi ZH, high(line1)
 	ldi ZL, low (line1)
-	ldi temp, 0b10010011
-	rcall SET_CURSOR_POS 
+	
+	cpi temp, 0
+	brne NOT_LINE_1
+	rcall SHIFT_LINE_RAND
+	NOT_LINE_1:
+	cpi temp, 0
+	breq LINE_1
 	rcall SHIFT_LINE_LEFT
-	rcall UPDATE_LINE
+	LINE_1:
 
 	ldi ZH, high(line2)
 	ldi ZL, low (line2)
-	ldi temp, 0b11010011
-	rcall SET_CURSOR_POS 
+
+	cpi temp, 1
+	brne NOT_LINE_2
+	rcall SHIFT_LINE_RAND
+	NOT_LINE_2:
+	cpi temp, 1
+	breq LINE_2
 	rcall SHIFT_LINE_LEFT
-	rcall UPDATE_LINE
+	LINE_2:
 
 	ldi ZH, high(line3)
 	ldi ZL, low (line3)
-	ldi temp, 0b10100111
-	rcall SET_CURSOR_POS 
-	rcall SHIFT_LINE_LEFT
-	rcall UPDATE_LINE
 
+	cpi temp, 2
+	brne NOT_LINE_3
+	rcall SHIFT_LINE_RAND
+	NOT_LINE_3:
+	cpi temp, 2
+	breq LINE_3
+	rcall SHIFT_LINE_LEFT
+	LINE_3:
+	
 	ldi ZH, high(line4)
 	ldi ZL, low (line4)
-	ldi temp, 0b11100111
-	rcall SET_CURSOR_POS 
-	rcall SHIFT_LINE_LEFT
-	rcall UPDATE_LINE
-	
-	rcall DELAY_LONG
-	rcall DELAY_LONG
-	rcall DELAY_LONG
-	ret
 
-	UPDATE_LINE:
-		ld PA, Z
-		rcall WRITE_FAST
+	cpi temp, 3
+	brne NOT_LINE_4
+	rcall SHIFT_LINE_RAND
+	NOT_LINE_4:
+	cpi temp, 3
+	breq LINE_4
+	rcall SHIFT_LINE_LEFT
+	LINE_4:
+
+	ret
+SHIFT_LINE_RAND:
+	push temp
+	push temp3
+	ldi temp2, screenwidth
+ 
+	mov YL, ZL
+	mov YH, ZH
+	inc YL
+ 
+	LOOP_SHIFT_LINE_R:
+		dec temp2
+		breq END_SHIFT_LINE_R
+		ld temp3, Y+
+		st Z+, temp3
+		rjmp LOOP_SHIFT_LINE_R
+ 
+	END_SHIFT_LINE_R:
+		rcall NEXT_RANDOM
+		mov temp, rand
+		mod10:
+			subi temp, 10
+			cpi temp, 10
+			brsh mod10
+		subi temp, -0x30
+		st -Z, temp
+		pop temp3
+		pop temp
+		ret
+SHIFT_LINE_LEFT:
+	push temp
+	push temp3
+	ldi temp2, screenwidth
+ 
+	mov YL, ZL
+	mov YH, ZH
+	inc YL
+ 
+	LOOP_SHIFT_LINE:
+		dec temp2
+		breq END_SHIFT_LINE
+		ld temp3, Y+
+		st Z+, temp3
+		rjmp LOOP_SHIFT_LINE
+ 
+	END_SHIFT_LINE:
+		ldi temp, 0x5F
+		st -Z, temp
+		pop temp3
+		pop temp
 		ret
 
-SHIFT_LINE:
-	ldi ZH, high(line1)
-	ldi ZL, low (line1)
-	rcall SHIFT_LINE_LEFT
-
-	ldi ZH, high(line2)
-	ldi ZL, low (line2)
-	rcall SHIFT_LINE_LEFT
-
-	ldi ZH, high(line3)
-	ldi ZL, low (line3)
-	rcall SHIFT_LINE_LEFT
-
-	ldi ZH, high(line4)
-	ldi ZL, low (line4)
-	rcall SHIFT_LINE_LEFT
-	ret
 SET_CURSOR_POS:
 	cbi PORTA, 1
 	out PORTB, temp
@@ -396,7 +408,6 @@ INIT_RANDOM:
 	in rand, TCNT1L
 	ret
 NEXT_RANDOM:
-	mul TCNT1L, TCNT1H
 	in rand, TCNT1L
 	ret
 
@@ -449,14 +460,14 @@ WRITE_TEXT:
 	out PORTB, PA
 	sbi PORTA,0 ; SETB EN
 	cbi PORTA,0 ; CLR EN
-	rcall DELAY_MID
+	rcall DELAY_SHORT
 	ret
 WRITE_FAST:
 	sbi PORTA,1 ; SETB RS
 	out PORTB, PA
 	sbi PORTA,0 ; SETB EN
 	cbi PORTA,0 ; CLR EN
-	rcall DELAY_SHORT
+	;rcall DELAY_SHORT
 	ret
 	
 UP: 
@@ -466,10 +477,12 @@ OK:
 	ldi temp, 2 
 	reti
 READ_KEY:
+	push temp
+	in temp, SREG
+	push temp
 	push r0
 	push ZH
 	push ZL
-	push temp
 
 	ldi ZH, high(2*keytable)
 	ldi ZL, low (2*keytable)
@@ -519,19 +532,22 @@ READ_KEY:
 		adiw ZL,1 			; point to next key code of that column
 		rjmp KeyRowFound 	; repeat shift
 		
-	KeyFound: 				; pressed key is found 
-		lpm 				; read key code to R0
-		mov key, r0 		; countinue key processing
-		out PORTC, key
-		;rjmp RETURN_READ_KEY
+KeyFound: 				; pressed key is found 
+	lpm 				; read key code to R0
+	mov key, r0 		; countinue key processing
+	
 
-	NoKey:
-	;RETURN_READ_KEY
-		pop temp
-		pop ZL
-		pop ZH
-		pop r0
-		reti
+NoKey:
+	clr temp
+	out TCNT0, temp
+
+	pop ZL
+	pop ZH
+	pop r0
+	pop temp
+	out SREG, temp
+	pop temp
+	reti
 		
 DELAY_SHORT:
 	ldi  r18, 6
