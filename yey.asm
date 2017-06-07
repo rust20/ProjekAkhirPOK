@@ -15,7 +15,6 @@
 	.def temp2 = r17
 	.def temp3 = r20
 	.def PA    = r21
-	 
  
 	.equ block1 = 0x60
 	.equ line1 	= 0x80 
@@ -25,11 +24,11 @@
 
 	.equ screenwidth = 20
 
-	.equ DDR_LED 	= DDRC
-	.equ DATA_LED 	= PORTC
-	.equ DDR_KEY	= DDRE
-	.equ PORT_KEY 	= PORTE
-	.equ PIN_KEY 	= PINE
+	.equ DDR_LED 	= DDRB
+	.equ PORT_LED 	= PORTB
+	.equ DDR_KEY	= DDRC
+	.equ PORT_KEY 	= PORTC
+	.equ PIN_KEY 	= PINC
 
 	.equ DDR_LCD_A  = DDRA
 	.equ DDR_LCD_B  = DDRB
@@ -46,7 +45,7 @@
 	.org $00	rjmp MAIN
 	.org $01	rjmp UP
 	.org $02	rjmp OK
-	.org $0E 	rjmp READ_KEY
+	.org $05 	rjmp READ_KEY
 
 MAIN:
 	
@@ -73,15 +72,18 @@ INIT_INTERRUPT:
 	ldi temp, 0b11000000
 	out GICR, temp
 INIT_TIMER:
-	ldi temp, (1<<CS00)
+	ldi temp, (1<<CS10)
 	out TCCR1B, temp
+	ldi temp, (1<<CS00)
 	out TCCR0, temp
-	ldi temp, (1<<OCF0)
+	ldi temp, (1<<OCF1B)
 	out TIFR, temp
-	ldi temp, (1<<OCIE0)
+	ldi temp, (1<<OCIE1B)
 	out TIMSK, temp
+	ldi temp, 0x0F
+	out OCR1BH, temp
 	ldi temp, 0xFF
-	out OCR0, temp
+	out OCR1BL, temp
 	sei
 INIT_GAMESETTING:
 	ldi temp, $03
@@ -99,7 +101,151 @@ INIT_GAMESETTING:
 	add char1, temp
 	add char2, temp
 	add char3, temp
+
 rjmp ASK_LEVEL
+
+INIT_LCD:
+	cbi SETTING_A, RS_A ; CLR RS
+	ldi temp, 0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
+	out PORT_LCD_A, temp
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
+ 
+	cbi SETTING_A, RS_A ; CLR RS
+	ldi temp, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
+	out PORT_LCD_A, temp
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
+ 
+	rcall CLEAR_LCD ; CLEAR LCD
+	cbi SETTING_A, RS_A ; CLR RS
+	ldi temp, $06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
+	out PORT_LCD_A, temp
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
+
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp, 0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
+	out PORT_LCD_B, temp
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_SHORT
+ 
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
+	out PORT_LCD_B, temp
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_SHORT
+ 
+	rcall CLEAR_LCD_2 ; CLEAR LCD
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp, $06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
+	out PORT_LCD_B, temp
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_SHORT
+
+	out PORT_LED, level
+ 
+	ret	
+CLEAR_LCD:
+	cbi SETTING_A,1 ; CLR RS
+	ldi temp2,$01 ; MOV DATA,0x01
+	out PORT_LCD_A,temp2
+	sbi SETTING_A,0 ; SETB EN
+	cbi SETTING_A,0 ; CLR EN
+	rcall DELAY_MID
+	ret
+CLEAR_LCD_2:
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp2,$01 ; MOV DATA,0x01
+	out PORT_LCD_B,temp2
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_MID
+
+	out PORT_LED, level
+	ret
+LOADBYTE:
+	lpm ; Load byte from program memory into r0
+	
+	tst r0
+	breq END_LOADBYTE ; If so, quit
+	mov PA, r0 ; Put the character onto Port B
+	rcall WRITE_TEXT
+	adiw ZL,1 ; Increase Z registers
+ 
+	rjmp LOADBYTE
+	END_LOADBYTE:
+	ret
+LOADBYTE_2:
+	lpm ; Load byte from program memory into r0
+	
+	tst r0
+	breq END_LOADBYTE_2 ; If so, quit
+	mov PA, r0 ; Put the character onto Port B
+	rcall WRITE_FAST_2
+	adiw ZL,1 ; Increase Z registers
+ 
+	rjmp LOADBYTE_2
+	END_LOADBYTE_2:
+	ret
+WRITE_TEXT:
+	sbi SETTING_A, RS_A ; SETB RS
+	out PORT_LCD_A, PA
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
+	ret
+WRITE_FAST:
+	sbi SETTING_A, RS_A ; SETB RS
+	out PORT_LCD_A, PA
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	ret
+WRITE_FAST_2:
+	sbi SETTING_B, RS_B ; SETB RS
+	out PORT_LCD_B, PA
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+
+	out PORT_LED, level
+	ret
+
+DELAY_SHORT:
+	ldi  r18, 6
+	ldi  r19, 49
+	L0: dec  r19
+	    brne L0
+	    dec  r18
+	    brne L0
+	ret
+DELAY_MID:
+    ldi  r18, 52
+    ldi  r19, 242
+	L1: dec  r19
+	    brne L1
+	    dec  r18
+	    brne L1
+	    nop
+	ret
+DELAY_LONG:
+    ldi  r18, 208
+    ldi  r19, 202
+	L2: dec  r19
+	    brne L2
+	    dec  r18
+	    brne L2
+	    nop
+		ret
 
 DISPLAY_WELCOME:
 	ldi ZH, high(2*welcome_message)
@@ -220,7 +366,9 @@ GAME_START:
 
 	rcall CLEAR_LCD
 	rcall CLEAR_LCD_2
-	ldi temp, 0x00
+	
+	; Write name
+	ldi temp, 0x80
 	rcall SET_CURSOR_POS_2
 	mov PA, char1
 	rcall WRITE_FAST_2
@@ -228,13 +376,22 @@ GAME_START:
 	rcall WRITE_FAST_2
 	mov PA, char3
 	rcall WRITE_FAST_2
-	ldi temp, 0x40
+	
+	; Write lives
+	ldi temp, 0xC0
 	rcall SET_CURSOR_POS_2
 	ldi PA, 0xF4
 	rcall WRITE_FAST_2
 	rcall WRITE_FAST_2
 	rcall WRITE_FAST_2
-
+	
+	; Write score
+	ldi temp, 0x94
+	rcall SET_CURSOR_POS_2
+	ldi PA, 0x30
+	rcall WRITE_FAST_2
+	rcall WRITE_FAST_2
+	rcall WRITE_FAST_2
 
 	rcall SHIFT_LINE_LEFT
 	rcall LOAD_GAME_DATA
@@ -318,6 +475,7 @@ UPDATE_GAME_SCREEN:
 			ld temp2, Z+
 			mov PA, temp2
 			rcall WRITE_FAST
+			rcall DELAY_SHORT
 			rjmp LOOP_DISPLAY_LINE
 	 
 		END_DISPLAY_LINE:
@@ -447,116 +605,6 @@ NEXT_RANDOM:
 	in rand, TCNT1L
 	ret
 
-INIT_LCD:
-	cbi SETTING_A, RS_A ; CLR RS
-	ldi temp2, 0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
-	out PORT_LCD_A, temp2
-	sbi SETTING_A, EN_A ; SETB EN
-	cbi SETTING_A, EN_A ; CLR EN
-	sbi SETTING_A, EN_A ; SETB EN
-	cbi SETTING_A, EN_A ; CLR EN
-	rcall DELAY_SHORT
- 
-	cbi SETTING_A, RS_A ; CLR RS
-	ldi temp2, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
-	out PORT_LCD_A, temp2
-	sbi SETTING_A, EN_A ; SETB EN
-	cbi SETTING_A, EN_A ; CLR EN
-	rcall DELAY_SHORT
- 
-	rcall CLEAR_LCD ; CLEAR LCD
-	cbi SETTING_A, RS_A ; CLR RS
-	ldi temp2, $06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
-	out PORT_LCD_A, temp2
-	sbi SETTING_A, EN_A ; SETB EN
-	cbi SETTING_A, EN_A ; CLR EN
-	rcall DELAY_SHORT
-
-	cbi SETTING_B, RS_B ; CLR RS
-	ldi temp2, 0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
-	out PORT_LCD_B, temp2
-	sbi SETTING_B, EN_B ; SETB EN
-	cbi SETTING_B, EN_B ; CLR EN
-	sbi SETTING_B, EN_B ; SETB EN
-	cbi SETTING_B, EN_B ; CLR EN
-	rcall DELAY_SHORT
- 
-	cbi SETTING_B, RS_B ; CLR RS
-	ldi temp2, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
-	out PORT_LCD_B, temp2
-	sbi SETTING_B, EN_B ; SETB EN
-	cbi SETTING_B, EN_B ; CLR EN
-	rcall DELAY_SHORT
- 
-	rcall CLEAR_LCD_2 ; CLEAR LCD
-	cbi SETTING_B, RS_B ; CLR RS
-	ldi temp2, $06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
-	out PORT_LCD_B, temp2
-	sbi SETTING_B, EN_B ; SETB EN
-	cbi SETTING_B, EN_B ; CLR EN
-	rcall DELAY_SHORT
- 
-	ret	
-CLEAR_LCD:
-	cbi SETTING_A,1 ; CLR RS
-	ldi temp2,$01 ; MOV DATA,0x01
-	out PORT_LCD_A,temp2
-	sbi SETTING_A,0 ; SETB EN
-	cbi SETTING_A,0 ; CLR EN
-	rcall DELAY_MID
-	ret
-CLEAR_LCD_2:
-	cbi SETTING_B, RS_B ; CLR RS
-	ldi temp2,$01 ; MOV DATA,0x01
-	out PORT_LCD_B,temp2
-	sbi SETTING_B, EN_B ; SETB EN
-	cbi SETTING_B, EN_B ; CLR EN
-	rcall DELAY_MID
-	ret
-LOADBYTE:
-	lpm ; Load byte from program memory into r0
-	
-	tst r0
-	breq END_LOADBYTE ; If so, quit
-	mov PA, r0 ; Put the character onto Port B
-	rcall WRITE_TEXT
-	adiw ZL,1 ; Increase Z registers
- 
-	rjmp LOADBYTE
-	END_LOADBYTE:
-	ret
-LOADBYTE_2:
-	lpm ; Load byte from program memory into r0
-	
-	tst r0
-	breq END_LOADBYTE_2 ; If so, quit
-	mov PA, r0 ; Put the character onto Port B
-	rcall WRITE_FAST_2
-	adiw ZL,1 ; Increase Z registers
- 
-	rjmp LOADBYTE_2
-	END_LOADBYTE_2:
-	ret
-WRITE_TEXT:
-	sbi SETTING_A, RS_A ; SETB RS
-	out PORT_LCD_A, PA
-	sbi SETTING_A, EN_A ; SETB EN
-	cbi SETTING_A, EN_A ; CLR EN
-	rcall DELAY_SHORT
-	ret
-WRITE_FAST:
-	sbi SETTING_A, RS_A ; SETB RS
-	out PORT_LCD_A, PA
-	sbi SETTING_A, EN_A ; SETB EN
-	cbi SETTING_A, EN_A ; CLR EN
-	ret
-WRITE_FAST_2:
-	sbi SETTING_B, RS_B ; SETB RS
-	out PORT_LCD_B, PA
-	sbi SETTING_B, EN_B ; SETB EN
-	cbi SETTING_B, EN_B ; CLR EN
-	ret
-
 UP: 
 	ldi temp, 1 
 	reti
@@ -581,7 +629,7 @@ READ_KEY:
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column pressed?
 	
-	brne KeyRowFound 		; key found
+	brne KEY_ROW_FOUND 		; key found
 	adiw ZL,4 				; column not found, point Z one row down
 
 	; read column 2
@@ -591,7 +639,7 @@ READ_KEY:
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column?
 	
-	brne KeyRowFound 		; key found
+	brne KEY_ROW_FOUND 		; key found
 	adiw ZL,4 				; column not found, another four keys down
 
 	; read column 3
@@ -601,7 +649,7 @@ READ_KEY:
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column?
 
-	brne KeyRowFound 		; key found
+	brne KEY_ROW_FOUND 		; key found
 	adiw ZL,4 				; column not found, another four keys down
 	
 	; read column 4
@@ -611,57 +659,101 @@ READ_KEY:
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column?
 
-	breq NoKey 				; unexpected: no key in this column pressed
+	brne KEY_ROW_FOUND		; unexpected: no key in this column pressed
+	rjmp NO_KEY
 
-	KeyRowFound: 			; column identified, now identify row
+	KEY_ROW_FOUND: 			; column identified, now identify row
 		lsr temp 			; shift a logic 0 in left, bit 0 to carry
-		brcc KeyFound 		; a zero rolled out, key is found
+		brcc KEY_FOUND 		; a zero rolled out, key is found
 		adiw ZL,1 			; point to next key code of that column
-		rjmp KeyRowFound 	; repeat shift
-		
-KeyFound: 				; pressed key is found 
+		rjmp KEY_ROW_FOUND 	; repeat shift
+KEY_FOUND: 				; pressed key is found 
 	lpm 				; read key code to R0
 	mov key, r0 		; countinue key processing
 	rcall Z_LINE1
-	lpm 
+	ld r0, Z 
 	cp key, r0
 	brne CHECK_LINE2
-	inc score_satuan
-	rjmp NoKey
+	rjmp MATCH
 
 	CHECK_LINE2:
 	rcall Z_LINE2
-	lpm 
+	ld r0, Z 
 	cp key, r0
 	brne CHECK_LINE3
-	inc score_satuan
-	rjmp NoKey
+	rjmp MATCH
 
 	CHECK_LINE3:
 	rcall Z_LINE3
-	lpm 
+	ld r0, Z 
 	cp key, r0
 	brne CHECK_LINE4
-	inc score_satuan
-	rjmp NoKey
+	rjmp MATCH
 
 	CHECK_LINE4:
 	rcall Z_LINE4
-	lpm 
+	ld r0, Z 
 	cp key, r0
 	brne NO_MATCH
-	inc score_satuan
-	rjmp NoKey
+	rjmp MATCH
 
 NO_MATCH:
+	ldi temp, 0xC0
+	rcall SET_CURSOR_POS_2
+	ldi PA, 0x5F
 	dec lives
-	brne NoKey
-	rjmp EXIT
+	mov temp, lives
 
-NoKey:
+	cpi temp, 2
+	breq LIVE_2
+	cpi temp, 1
+	breq LIVE_1
+	cpi temp, 0
+	brne NO_KEY
+	rcall WRITE_FAST_2
+	rcall WRITE_FAST_2
+	rcall WRITE_FAST_2
+	rjmp DEAD
+	
+	LIVE_1:
+	rcall WRITE_FAST_2
+	LIVE_2:
+	rcall WRITE_FAST_2
+
+	rjmp NO_KEY
+
+MATCH:
+	ldi temp, 0x0f
+	out PORT_LED, temp
+	inc score_satuan
+	mov temp, score_satuan
+	cpi temp, 0x3A
+	brne DISP_SCORE
+	ldi temp, 0x30
+	mov score_satuan, temp
+	inc score_puluhan
+	mov temp, score_puluhan
+	cpi temp, 0x3A
+	brne DISP_SCORE
+	ldi temp, 0x30
+	mov score_puluhan, temp
+	inc score_ratusan
+
+	DISP_SCORE:
+	ldi temp, 0x94
+	rcall SET_CURSOR_POS_2
+	mov PA, score_ratusan
+	rcall WRITE_FAST_2
+	mov PA, score_puluhan
+	rcall WRITE_FAST_2
+	mov PA, score_satuan
+	rcall WRITE_FAST_2	
+
+NO_KEY:
 	clr temp
-	out TCNT0, temp
-
+	out TCNT1L, temp
+	out TCNT1H, temp
+	
 	pop ZL
 	pop ZH
 	pop r0
@@ -670,32 +762,12 @@ NoKey:
 	pop temp
 	reti
 		
-DELAY_SHORT:
-	ldi  r18, 6
-	ldi  r19, 49
-	L0: dec  r19
-	    brne L0
-	    dec  r18
-	    brne L0
-	ret
-DELAY_MID:
-    ldi  r18, 52
-    ldi  r19, 242
-	L1: dec  r19
-	    brne L1
-	    dec  r18
-	    brne L1
-	    nop
-	ret
-DELAY_LONG:
-    ldi  r18, 208
-    ldi  r19, 202
-	L2: dec  r19
-	    brne L2
-	    dec  r18
-	    brne L2
-	    nop
-		ret
+DEAD:
+	ldi ZH, high(2*dead_message)
+	ldi ZL, low (2*dead_message)
+	rcall CLEAR_LCD
+	rcall LOADBYTE
+	rcall ENDLESS_LOOP
 
 Z_LINE1:
 	ldi ZH, high(line1)
@@ -718,17 +790,22 @@ ENDLESS_LOOP:	rjmp ENDLESS_LOOP
 
 ;data
 	welcome_message:
-		.db "SELAMAT DATANG DI",0
-		.db "NUMBER TILES !1!",0
+		.db "SELAMAT DATANG DI"
+		.db 0
+		.db "NUMBER TILES !1!"
+		.db 0
 	askname_message:
 		.db "MASUKKAN NAMA ANDA", 0
-	 
+		.db 0
 	level_message:
-		.db "PILIH LEVEL AWAL",0
-	 
+		.db "PILIH LEVEL AWAL"
+		.db 0
 	stage_message:
-		.db "PLAYER : ",0,0,"SCORE ",0,"LIVES ",0
-	 
+		.db "PLAYER : ",0,0,"SCORE ",0,"LIVES "
+		.db 0
+	dead_message:
+		.db "YOU LOSE"
+		.db 0
 	stage_number:
 		.db "2326498553"
 		.db "3802775842"
