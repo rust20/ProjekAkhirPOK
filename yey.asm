@@ -24,6 +24,24 @@
 	.equ line4 	= 0xe0
 
 	.equ screenwidth = 20
+
+	.equ DDR_LED 	= DDRC
+	.equ DATA_LED 	= PORTC
+	.equ DDR_KEY	= DDRE
+	.equ PORT_KEY 	= PORTE
+	.equ PIN_KEY 	= PINE
+
+	.equ DDR_LCD_A  = DDRA
+	.equ DDR_LCD_B  = DDRB
+	.equ PORT_LCD_A = PORTA
+	.equ PORT_LCD_B = PORTB
+	.equ SETTING_A	= PORTD
+	.equ SETTING_B	= PORTD
+	.equ EN_A = 0
+	.equ EN_B = 7
+	.equ RS_A = 1
+	.equ RS_B = 4
+
  
 	.org $00	rjmp MAIN
 	.org $01	rjmp UP
@@ -39,15 +57,16 @@ INIT_STACK:
 	out SPH, temp
 INIT_LED:
 	ser temp
-	out DDRA, temp ; Set port A as output
-	out DDRB, temp ; Set port B as output
-	out DDRC, temp
+	out DDR_LCD_A, temp ; Set port B as output
+	out DDR_LCD_B, temp ; Set port C as output
+	out DDR_LED, temp ; Set port E as output
+	ldi temp, 0b11
 	rcall INIT_LCD
 INIT_KEY:
 	ldi temp, 0xF0
-	out DDRD, temp
+	out DDR_KEY, temp
 	ldi temp, 0x0F
-	out PORTD, temp
+	out PORT_KEY, temp
 INIT_INTERRUPT:
 	ldi temp, 0b00001010
 	out MCUCR, temp
@@ -81,6 +100,7 @@ INIT_GAMESETTING:
 	add char2, temp
 	add char3, temp
 rjmp ASK_LEVEL
+
 DISPLAY_WELCOME:
 	ldi ZH, high(2*welcome_message)
 	ldi ZL, low(2*welcome_message)
@@ -88,16 +108,15 @@ DISPLAY_WELCOME:
 	rcall DELAY_LONG
 	rcall DELAY_LONG
  
-	cbi PORTA, 1 		; disabling rs, so its a data
+	cbi SETTING_A, RS_A 		; disabling rs, so its a data
 	ldi temp2, 0b11000000  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-	out PORTB, temp2
-	sbi PORTA,0
-	cbi PORTA,0
+	out PORT_LCD_A, temp2
+	sbi SETTING_A, EN_A
+	cbi SETTING_A, EN_A
 	adiw ZL, 1  ; skipping space
 	rcall LOADBYTE
 	rcall DELAY_LONG
 	rcall DELAY_LONG
- 
 ASK_NAME:
 	ldi temp,0
 	rcall INIT_LCD
@@ -107,11 +126,11 @@ ASK_NAME:
 	rcall LOADBYTE
 	
 	LOOP1:
-		cbi PORTA, 1 		; disabling rs, so its a data
-		ldi temp2, 0b11000000  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-		out PORTB, temp2
-		sbi PORTA,0
-		cbi PORTA,0
+		cbi SETTING_A, RS_A		; disabling rs, so its a data
+		ldi temp2, 0b11000000  	; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
+		out PORT_LCD_A, temp2
+		sbi SETTING_A, EN_A
+		cbi SETTING_A, EN_A
  
 		mov PA, char1
 		rcall WRITE_TEXT
@@ -129,11 +148,11 @@ ASK_NAME:
  
 	LOOP2:
 		
-		cbi PORTA, 1 		; disabling rs, so its a data
-		ldi temp2, 0b11000001  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-		out PORTB, temp2
-		sbi PORTA,0
-		cbi PORTA,0
+		cbi SETTING_A, RS_A		; disabling rs, so its a data
+		ldi temp2, 0b11000001  	; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
+		out PORT_LCD_A, temp2
+		sbi SETTING_A, EN_A
+		cbi SETTING_A, EN_A
 		
 		mov PA, char2
 		rcall WRITE_TEXT
@@ -151,11 +170,11 @@ ASK_NAME:
  
 	LOOP3:
 	
-		cbi PORTA, 1 		; disabling rs, so its a data
+		cbi SETTING_A, RS_A		; disabling rs, so its a data
 		ldi temp2, 0b11000010  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-		out PORTB, temp2
-		sbi PORTA,0
-		cbi PORTA,0
+		out PORT_LCD_A, temp2
+		sbi SETTING_A, EN_A
+		cbi SETTING_A, EN_A
 		
 		mov PA, char3
 		rcall WRITE_TEXT
@@ -178,11 +197,11 @@ ASK_LEVEL:
 	rcall LOADBYTE
  
 	LOOP_ASK_LEVEL:
-		cbi PORTA, 1
+		cbi SETTING_A, RS_A
 		ldi temp2, 0b11000000
-		out PORTB, temp2
-		sbi PORTA, 0
-		cbi PORTA, 0
+		out PORT_LCD_A, temp2
+		sbi SETTING_A, EN_A
+		cbi SETTING_A, EN_A
  
 		mov PA, level
 		rcall WRITE_TEXT
@@ -197,14 +216,33 @@ ASK_LEVEL:
 			brne LOOP_ASK_LEVEL
 			ldi temp, 0
 GAME_START:
-	rcall CLEAR_LCD 
-	
 	ldi temp, 0
-	 
+
 	rcall CLEAR_LCD
+	rcall CLEAR_LCD_2
+	ldi temp, 0x00
+	rcall SET_CURSOR_POS_2
+	mov PA, char1
+	rcall WRITE_FAST_2
+	mov PA, char2
+	rcall WRITE_FAST_2
+	mov PA, char3
+	rcall WRITE_FAST_2
+	ldi temp, 0x40
+	rcall SET_CURSOR_POS_2
+	ldi PA, 0xF4
+	rcall WRITE_FAST_2
+	rcall WRITE_FAST_2
+	rcall WRITE_FAST_2
+
+
 	rcall SHIFT_LINE_LEFT
 	rcall LOAD_GAME_DATA
-	;rcall INIT_GAME_SCREEN
+	ldi temp3, 15
+	JAJAJA:
+		rcall SHIFT_LINE
+		dec temp3
+		brne JAJAJA
  
 	ldi temp3, 10
 	LOOP_GAME_START:
@@ -247,26 +285,22 @@ LOAD_GAME_DATA:
 			ret
  
 UPDATE_GAME_SCREEN:
-	ldi ZH, high(line1)
-	ldi ZL, low (line1)
+	rcall Z_LINE1
 	ldi temp, 0b10000000
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE
  
-	ldi ZH, high(line2)
-	ldi ZL, low (line2)
+	rcall Z_LINE2
 	ldi temp, 0b11000000
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 
  
-	ldi ZH, high(line3)
-	ldi ZL, low (line3)
+	rcall Z_LINE3
 	ldi temp, 0b10010100
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 
 	
-	ldi ZH, high(line4)
-	ldi ZL, low (line4)
+	rcall Z_LINE4
 	ldi temp, 0b11010100
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 	
@@ -293,8 +327,7 @@ SHIFT_LINE:
 	ldi temp, 3
 	and temp, rand
 
-	ldi ZH, high(line1)
-	ldi ZL, low (line1)
+	rcall Z_LINE1
 	
 	cpi temp, 0
 	brne NOT_LINE_1
@@ -305,8 +338,7 @@ SHIFT_LINE:
 	rcall SHIFT_LINE_LEFT
 	LINE_1:
 
-	ldi ZH, high(line2)
-	ldi ZL, low (line2)
+	rcall Z_LINE2
 
 	cpi temp, 1
 	brne NOT_LINE_2
@@ -317,8 +349,7 @@ SHIFT_LINE:
 	rcall SHIFT_LINE_LEFT
 	LINE_2:
 
-	ldi ZH, high(line3)
-	ldi ZL, low (line3)
+	rcall Z_LINE3
 
 	cpi temp, 2
 	brne NOT_LINE_3
@@ -329,8 +360,7 @@ SHIFT_LINE:
 	rcall SHIFT_LINE_LEFT
 	LINE_3:
 	
-	ldi ZH, high(line4)
-	ldi ZL, low (line4)
+	rcall Z_LINE4
 
 	cpi temp, 3
 	brne NOT_LINE_4
@@ -394,10 +424,16 @@ SHIFT_LINE_LEFT:
 		ret
 
 SET_CURSOR_POS:
-	cbi PORTA, 1
-	out PORTB, temp
-	sbi PORTA, 0
-	cbi PORTA, 0
+	cbi SETTING_A, RS_A
+	out PORT_LCD_A, temp
+	sbi SETTING_A, EN_A
+	cbi SETTING_A, EN_A
+	ret
+SET_CURSOR_POS_2:
+	cbi SETTING_B, RS_B
+	out PORT_LCD_B, temp
+	sbi SETTING_B, EN_B
+	cbi SETTING_B, EN_B
 	ret
 
 EXIT:
@@ -412,35 +448,69 @@ NEXT_RANDOM:
 	ret
 
 INIT_LCD:
-	cbi PORTA,1 ; CLR RS
-	ldi temp2,0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
-	out PORTB,temp2
-	sbi PORTA,0 ; SETB EN
-	cbi PORTA,0 ; CLR EN
-	rcall DELAY_MID
+	cbi SETTING_A, RS_A ; CLR RS
+	ldi temp2, 0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
+	out PORT_LCD_A, temp2
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
  
-	cbi PORTA,1 ; CLR RS
-	ldi temp2,$0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
-	out PORTB,temp2
-	sbi PORTA,0 ; SETB EN
-	cbi PORTA,0 ; CLR EN
-	rcall DELAY_MID
+	cbi SETTING_A, RS_A ; CLR RS
+	ldi temp2, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
+	out PORT_LCD_A, temp2
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
  
 	rcall CLEAR_LCD ; CLEAR LCD
-	cbi PORTA,1 ; CLR RS
-	ldi temp2,$06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
-	out PORTB,temp2
-	sbi PORTA,0 ; SETB EN
-	cbi PORTA,0 ; CLR EN
-	rcall DELAY_MID
+	cbi SETTING_A, RS_A ; CLR RS
+	ldi temp2, $06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
+	out PORT_LCD_A, temp2
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
+	rcall DELAY_SHORT
+
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp2, 0x38 ; MOV DATA,0x38 --> 8bit, 2line, 5x7
+	out PORT_LCD_B, temp2
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_SHORT
+ 
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp2, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
+	out PORT_LCD_B, temp2
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_SHORT
+ 
+	rcall CLEAR_LCD_2 ; CLEAR LCD
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp2, $06 ; MOV DATA,0x06 --> increase cursor, display sroll OFF
+	out PORT_LCD_B, temp2
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	rcall DELAY_SHORT
  
 	ret	
 CLEAR_LCD:
-	cbi PORTA,1 ; CLR RS
+	cbi SETTING_A,1 ; CLR RS
 	ldi temp2,$01 ; MOV DATA,0x01
-	out PORTB,temp2
-	sbi PORTA,0 ; SETB EN
-	cbi PORTA,0 ; CLR EN
+	out PORT_LCD_A,temp2
+	sbi SETTING_A,0 ; SETB EN
+	cbi SETTING_A,0 ; CLR EN
+	rcall DELAY_MID
+	ret
+CLEAR_LCD_2:
+	cbi SETTING_B, RS_B ; CLR RS
+	ldi temp2,$01 ; MOV DATA,0x01
+	out PORT_LCD_B,temp2
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
 	rcall DELAY_MID
 	ret
 LOADBYTE:
@@ -455,21 +525,38 @@ LOADBYTE:
 	rjmp LOADBYTE
 	END_LOADBYTE:
 	ret
+LOADBYTE_2:
+	lpm ; Load byte from program memory into r0
+	
+	tst r0
+	breq END_LOADBYTE_2 ; If so, quit
+	mov PA, r0 ; Put the character onto Port B
+	rcall WRITE_FAST_2
+	adiw ZL,1 ; Increase Z registers
+ 
+	rjmp LOADBYTE_2
+	END_LOADBYTE_2:
+	ret
 WRITE_TEXT:
-	sbi PORTA,1 ; SETB RS
-	out PORTB, PA
-	sbi PORTA,0 ; SETB EN
-	cbi PORTA,0 ; CLR EN
+	sbi SETTING_A, RS_A ; SETB RS
+	out PORT_LCD_A, PA
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
 	rcall DELAY_SHORT
 	ret
 WRITE_FAST:
-	sbi PORTA,1 ; SETB RS
-	out PORTB, PA
-	sbi PORTA,0 ; SETB EN
-	cbi PORTA,0 ; CLR EN
-	;rcall DELAY_SHORT
+	sbi SETTING_A, RS_A ; SETB RS
+	out PORT_LCD_A, PA
+	sbi SETTING_A, EN_A ; SETB EN
+	cbi SETTING_A, EN_A ; CLR EN
 	ret
-	
+WRITE_FAST_2:
+	sbi SETTING_B, RS_B ; SETB RS
+	out PORT_LCD_B, PA
+	sbi SETTING_B, EN_B ; SETB EN
+	cbi SETTING_B, EN_B ; CLR EN
+	ret
+
 UP: 
 	ldi temp, 1 
 	reti
@@ -489,8 +576,8 @@ READ_KEY:
 
 	; read column 1
 	ldi temp ,0b01111111 		; PB7 = 0
-	out PORTD,temp 
-	in temp ,PIND 			; read input line
+	out PORT_KEY,temp 
+	in temp ,PIN_KEY 			; read input line
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column pressed?
 	
@@ -499,8 +586,8 @@ READ_KEY:
 
 	; read column 2
 	ldi temp ,0b10111111 		; PB6 = 0
-	out PORTD,temp 
-	in temp ,PIND 			; read again input line
+	out PORT_KEY,temp 
+	in temp ,PIN_KEY 			; read again input line
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column?
 	
@@ -509,8 +596,8 @@ READ_KEY:
 
 	; read column 3
 	ldi temp ,0b11011111 		; PB5 = 0
-	out PORTD,temp 
-	in temp ,PIND 			; read last line
+	out PORT_KEY,temp 
+	in temp ,PIN_KEY 			; read last line
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column?
 
@@ -519,8 +606,8 @@ READ_KEY:
 	
 	; read column 4
 	ldi temp ,0b011101111 	; PB4 = 0
-	out PORTD,temp 
-	in temp ,PIND 			; read last line
+	out PORT_KEY,temp 
+	in temp ,PIN_KEY 			; read last line
 	ori temp ,0b11110000 	; mask upper bits
 	cpi temp ,0b11111111 	; a key in this column?
 
@@ -535,7 +622,41 @@ READ_KEY:
 KeyFound: 				; pressed key is found 
 	lpm 				; read key code to R0
 	mov key, r0 		; countinue key processing
-	
+	rcall Z_LINE1
+	lpm 
+	cp key, r0
+	brne CHECK_LINE2
+	inc score_satuan
+	rjmp NoKey
+
+	CHECK_LINE2:
+	rcall Z_LINE2
+	lpm 
+	cp key, r0
+	brne CHECK_LINE3
+	inc score_satuan
+	rjmp NoKey
+
+	CHECK_LINE3:
+	rcall Z_LINE3
+	lpm 
+	cp key, r0
+	brne CHECK_LINE4
+	inc score_satuan
+	rjmp NoKey
+
+	CHECK_LINE4:
+	rcall Z_LINE4
+	lpm 
+	cp key, r0
+	brne NO_MATCH
+	inc score_satuan
+	rjmp NoKey
+
+NO_MATCH:
+	dec lives
+	brne NoKey
+	rjmp EXIT
 
 NoKey:
 	clr temp
@@ -575,35 +696,53 @@ DELAY_LONG:
 	    brne L2
 	    nop
 		ret
+
+Z_LINE1:
+	ldi ZH, high(line1)
+	ldi ZL, low (line1)
+	ret
+Z_LINE2:
+	ldi ZH, high(line2)
+	ldi ZL, low (line2)
+	ret
+Z_LINE3:
+	ldi ZH, high(line3)
+	ldi ZL, low (line3)
+	ret
+Z_LINE4:
+	ldi ZH, high(line4)
+	ldi ZL, low (line4)
+	ret
 		
 ENDLESS_LOOP:	rjmp ENDLESS_LOOP
 
-welcome_message:
-	.db "SELAMAT DATANG DI",0
-	.db "NUMBER TILES !1!",0
-askname_message:
-	.db "MASUKKAN NAMA ANDA", 0
- 
-level_message:
-	.db "PILIH LEVEL AWAL",0
- 
-stage_message:
-	.db "PLAYER : ",0,0,"SCORE ",0,"LIVES ",0
- 
-stage_number:
-	.db "2326498553"
-	.db "3802775842"
-	.db "8842823897"
-	.db "2273758429"
-	.db "2399238599"
+;data
+	welcome_message:
+		.db "SELAMAT DATANG DI",0
+		.db "NUMBER TILES !1!",0
+	askname_message:
+		.db "MASUKKAN NAMA ANDA", 0
+	 
+	level_message:
+		.db "PILIH LEVEL AWAL",0
+	 
+	stage_message:
+		.db "PLAYER : ",0,0,"SCORE ",0,"LIVES ",0
+	 
+	stage_number:
+		.db "2326498553"
+		.db "3802775842"
+		.db "8842823897"
+		.db "2273758429"
+		.db "2399238599"
+		.db 0
+	 
+	lines :
+	.db 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F
 	.db 0
- 
-lines :
-.db 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F, 0x5F
-.db 0
 
-keytable:
-.db 0x01, 0x02, 0x03, 0x0F
-.db 0x04, 0x05, 0x06, 0x0A
-.db 0x07, 0x08, 0x09, 0x0B
-.db 0x0F, 0x00, 0x0F, 0x0F
+	keytable:
+	.db 0x31, 0x32, 0x33, 0xFF
+	.db 0x34, 0x35, 0x36, 0xFA
+	.db 0x37, 0x38, 0x39, 0xFB
+	.db 0xFF, 0x30, 0xFF, 0xFF
