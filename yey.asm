@@ -11,11 +11,13 @@
 	.def level = r14
 	.def rand  = r15
 	 
-	.def temp  = r16
-	.def temp2 = r17
-	.def temp3 = r20
-	.def PA    = r21
+	.def temp    = r16
+	.def temp2   = r17
+	.def temp3   = r20
+	.def PA      = r21
 	.def pointer = r22
+	.def led 	 = r23
+	.def cursor  = r24
  
 	.equ block1 = 0x60
 	.equ line1 	= 0x80 
@@ -24,7 +26,7 @@
 	.equ line4 	= 0xe0
 
 	.equ screenwidth = 20
-	.equ startdebug = ASK_LEVEL
+	.equ startdebug = DISPLAY_WELCOME
 
 	.equ DDR_LED 	= DDRB
 	.equ PORT_LED 	= PORTB
@@ -33,9 +35,9 @@
 	.equ PIN_KEY 	= PINC
 
 	.equ DDR_LCD_A  = DDRA
-	.equ DDR_LCD_B  = DDRB
+	.equ DDR_LCD_B  = DDRA
 	.equ PORT_LCD_A = PORTA
-	.equ PORT_LCD_B = PORTB
+	.equ PORT_LCD_B = PORTA
 	.equ SETTING_A	= PORTD
 	.equ SETTING_B	= PORTD
 	.equ EN_A = 0
@@ -73,21 +75,25 @@ INIT_INTERRUPT:
 	out MCUCR, temp
 	ldi temp, 0b11000000
 	out GICR, temp
-
-INIT_TIMER:
-	ldi temp, (1<<CS10)
-	out TCCR1B, temp
 	ldi temp, (1<<CS00)
 	out TCCR0, temp
+	sei
+	rjmp INIT_GAMESETTING
+
+INIT_TIMER:
+	cli
+	ldi temp, (1<<CS10)
+	out TCCR1B, temp
 	ldi temp, (1<<OCF1B)
 	out TIFR, temp
 	ldi temp, (1<<OCIE1B)
 	out TIMSK, temp
-	ldi temp, 0x06
+	ldi temp, 0x3F
 	out OCR1BH, temp
 	ldi temp, 0xFF
 	out OCR1BL, temp
 	sei
+	ret
 INIT_GAMESETTING:
 	ldi temp, $03
 	mov lives, temp
@@ -118,7 +124,7 @@ INIT_LCD:
 	rcall DELAY_SHORT
  
 	cbi SETTING_A, RS_A ; CLR RS
-	ldi temp, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
+	ldi temp, $0E ; MOV DATA,0x0A --> disp ON, cursor ON, blink OFF
 	out PORT_LCD_A, temp
 	sbi SETTING_A, EN_A ; SETB EN
 	cbi SETTING_A, EN_A ; CLR EN
@@ -142,7 +148,7 @@ INIT_LCD:
 	rcall DELAY_SHORT
  
 	cbi SETTING_B, RS_B ; CLR RS
-	ldi temp, $0E ; MOV DATA,0x0E --> disp ON, cursor ON, blink OFF
+	ldi temp, $0E ; MOV DATA,0x0A --> disp ON, cursor ON, blink OFF
 	out PORT_LCD_B, temp
 	sbi SETTING_B, EN_B ; SETB EN
 	cbi SETTING_B, EN_B ; CLR EN
@@ -156,7 +162,7 @@ INIT_LCD:
 	cbi SETTING_B, EN_B ; CLR EN
 	rcall DELAY_SHORT
 
-	out PORT_LED, level
+	out PORT_LED, led
  
 	ret	
 CLEAR_LCD:
@@ -165,6 +171,7 @@ CLEAR_LCD:
 	out PORT_LCD_A,temp2
 	sbi SETTING_A,0 ; SETB EN
 	cbi SETTING_A,0 ; CLR EN
+	ldi cursor, 0
 	rcall DELAY_MID
 	ret
 CLEAR_LCD_2:
@@ -173,9 +180,10 @@ CLEAR_LCD_2:
 	out PORT_LCD_B,temp2
 	sbi SETTING_B, EN_B ; SETB EN
 	cbi SETTING_B, EN_B ; CLR EN
+	ldi cursor, 0
 	rcall DELAY_MID
 
-	out PORT_LED, level
+	out PORT_LED, led
 	ret
 LOADBYTE:
 	lpm ; Load byte from program memory into r0
@@ -206,6 +214,7 @@ WRITE_TEXT:
 	out PORT_LCD_A, PA
 	sbi SETTING_A, EN_A ; SETB EN
 	cbi SETTING_A, EN_A ; CLR EN
+	inc cursor
 	rcall DELAY_MID
 	ret
 WRITE_FAST:
@@ -213,6 +222,7 @@ WRITE_FAST:
 	out PORT_LCD_A, PA
 	sbi SETTING_A, EN_A ; SETB EN
 	cbi SETTING_A, EN_A ; CLR EN
+	inc cursor
 	ret
 WRITE_FAST_2:
 	sbi SETTING_B, RS_B ; SETB RS
@@ -220,58 +230,64 @@ WRITE_FAST_2:
 	sbi SETTING_B, EN_B ; SETB EN
 	cbi SETTING_B, EN_B ; CLR EN
 
-	out PORT_LED, level
+	out PORT_LED, led
 	ret
 
 LEVEL_DELAY:
-	mov temp level
+	push temp
+	mov temp, level
 	subi temp, 0x30
 
-	cpi temp, 7
-	brne DELAY_6
+	cpi temp, 0
+	brne DELAY_1
 	rcall DELAY_LONG
 	rcall DELAY_LONG
-	ret
+	rjmp RETURN_LEVEL_DELAY
 
-	DELAY_6:
-	cpi temp, 6
-	brne DELAY_5
-	rcall DELAY_LONG
-	rcall DELAY_MID
-	ret
-
-	DELAY_5:
-	cpi temp, 5
-	brne DELAY_4
-	rcall DELAY_LONG
-	rcall DELAY_LONG
-	ret
-
-	DELAY_4:
-	cpi temp, 4
-	brne DELAY_3
-	rcall DELAY_MID
-	rcall DELAY_MID
-	ret
-
-	DELAY_3:
-	cpi temp, 3
+	DELAY_1:
+	cpi temp, 1
 	brne DELAY_2
+	rcall DELAY_LONG
 	rcall DELAY_MID
-	rcall DELAY_SHORT
-	ret
+	rjmp RETURN_LEVEL_DELAY
 
 	DELAY_2:
 	cpi temp, 2
-	brne DELAY_1
-	rcall DELAY_SHORT
+	brne DELAY_3
 	rcall DELAY_LONG
+	rjmp RETURN_LEVEL_DELAY
+
+	DELAY_3:
+	cpi temp, 3
+	brne DELAY_4
+	rcall DELAY_MID
+	rcall DELAY_MID
+	rjmp RETURN_LEVEL_DELAY
+
+	DELAY_4:
+	cpi temp, 4
+	brne DELAY_5
+	rcall DELAY_MID
+	rcall DELAY_SHORT
+	rjmp RETURN_LEVEL_DELAY
+
+	DELAY_5:
+	cpi temp, 5
+	brne DELAY_6
+	rcall DELAY_MID
+	rjmp RETURN_LEVEL_DELAY
+
+	DELAY_6:
+	cpi temp, 6
+	brne DELAY_7
+	rcall DELAY_SHORT
+	rjmp RETURN_LEVEL_DELAY	
+	
+	DELAY_7:
+	RETURN_LEVEL_DELAY:
+	pop temp 
 	ret
 
-	DELAY_1: 
-	ret
-
-	cpi temp, 
 DELAY_SHORT:
 	ldi  r18, 6
 	ldi  r19, 49
@@ -300,6 +316,8 @@ DELAY_LONG:
 		ret
 
 DISPLAY_WELCOME:
+	rcall DELAY_LONG
+	rcall DELAY_LONG
 	ldi ZH, high(2*welcome_message)
 	ldi ZL, low(2*welcome_message)
 	rcall LOADBYTE
@@ -313,6 +331,7 @@ DISPLAY_WELCOME:
 	rcall LOADBYTE
 	rcall DELAY_LONG
 	rcall DELAY_LONG
+	rcall DELAY_LONG
 ASK_NAME:
 	ldi temp,0
 	rcall INIT_LCD
@@ -323,8 +342,8 @@ ASK_NAME:
 	
 	LOOP1:
 		cbi SETTING_A, RS_A		; disabling rs, so its a data
-		ldi temp2, 0b11000000  	; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-		out PORT_LCD_A, temp2
+		ldi cursor, 0b11000000
+		out PORT_LCD_A, cursor
 		sbi SETTING_A, EN_A
 		cbi SETTING_A, EN_A
  
@@ -335,7 +354,7 @@ ASK_NAME:
 		cpi temp, 1
 		brne ELSE1
 		inc char1
-		ldi temp, 0S
+		ldi temp, 0
  
 		ELSE1:
 			cpi temp, 2 	
@@ -345,8 +364,8 @@ ASK_NAME:
 	LOOP2:
 		
 		cbi SETTING_A, RS_A		; disabling rs, so its a data
-		ldi temp2, 0b11000001  	; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-		out PORT_LCD_A, temp2
+		ldi cursor, 0b11000001  	; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
+		out PORT_LCD_A, cursor
 		sbi SETTING_A, EN_A
 		cbi SETTING_A, EN_A
 		
@@ -367,8 +386,8 @@ ASK_NAME:
 	LOOP3:
 	
 		cbi SETTING_A, RS_A		; disabling rs, so its a data
-		ldi temp2, 0b11000010  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
-		out PORT_LCD_A, temp2
+		ldi cursor, 0b11000010  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
+		out PORT_LCD_A, cursor
 		sbi SETTING_A, EN_A
 		cbi SETTING_A, EN_A
 		
@@ -392,13 +411,13 @@ ASK_LEVEL:
 	ldi ZL, low (2*level_message)
 	rcall LOADBYTE
 
-	ldi temp2, (1<<7)
-	out PORT_LED, temp2
+	ldi led, (1<<7)
+	out PORT_LED, led
  
 	LOOP_ASK_LEVEL:
 		cbi SETTING_A, RS_A
-		ldi temp3, 0b11000000
-		out PORT_LCD_A, temp3
+		ldi cursor, 0b11000000
+		out PORT_LCD_A, cursor
 		sbi SETTING_A, EN_A
 		cbi SETTING_A, EN_A
  
@@ -411,15 +430,16 @@ ASK_LEVEL:
 		cpi temp, 0x37
 		breq MAX_LEVEL
 		inc level
-		lsr temp2
-		out PORT_LED, temp2
+		lsr led
+		out PORT_LED, led
 		ldi temp, 0
 		rjmp END_ASK_LEVEL
 
 		MAX_LEVEL:
 			ldi temp, 0x30
 			mov level, temp
-			ldi temp2, 1<<7
+			ldi led, 1<<7
+			out PORT_LED, led
 
 
 	END_ASK_LEVEL:
@@ -470,11 +490,14 @@ GAME_START:
 
 	; Display pointer
 	ldi pointer, 1
-	ldi temp, 0x80
+	ldi cursor, 0x80
 	rcall SET_CURSOR_POS
 	ldi PA, 0x3E
 	rcall WRITE_FAST
  
+ 	; initiate timer interrupt
+	rcall INIT_TIMER
+
  	; Game loop
 	LOOP_GAME_START:
 		rcall UPDATE_GAME_SCREEN
@@ -515,25 +538,26 @@ LOAD_GAME_DATA:
  
 UPDATE_GAME_SCREEN:
 	rcall Z_LINE1
-	ldi temp, 0b10000001
+	ldi cursor, 0b10000001
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE
  
 	rcall Z_LINE2
-	ldi temp, 0b11000001
+	ldi cursor, 0b11000001
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 
  
 	rcall Z_LINE3
-	ldi temp, 0b10010101
+	ldi cursor, 0b10010101
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 
 	
 	rcall Z_LINE4
-	ldi temp, 0b11010101
+	ldi cursor, 0b11010101
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 	
 	
+	rcall LEVEL_DELAY
 	ret
 
 	DISPLAY_LINE:
@@ -544,7 +568,7 @@ UPDATE_GAME_SCREEN:
 			ld temp2, Z+
 			mov PA, temp2
 			rcall WRITE_FAST
-			rcall LEVEL_DELAY
+			rcall DELAY_SHORT
 			rjmp LOOP_DISPLAY_LINE
 	 
 		END_DISPLAY_LINE:
@@ -652,7 +676,7 @@ SHIFT_LINE_LEFT:
 
 SET_CURSOR_POS:
 	cbi SETTING_A, RS_A
-	out PORT_LCD_A, temp
+	out PORT_LCD_A, cursor
 	sbi SETTING_A, EN_A
 	cbi SETTING_A, EN_A
 	ret
@@ -661,6 +685,8 @@ SET_CURSOR_POS_2:
 	out PORT_LCD_B, temp
 	sbi SETTING_B, EN_B
 	cbi SETTING_B, EN_B
+
+	out PORT_LED, led
 	ret
 
 EXIT:
@@ -745,38 +771,56 @@ KEY_FOUND: 				; pressed key is found
 	cpi temp, 0xFF
 	breq MOVE_POINTER
 
-	rcall Z_LINE1
-	ld r0, Z 
-	cp key, r0
-	brne CHECK_LINE2
-	rjmp MATCH
+	cpi pointer, 1
+	breq CHECK_LINE1
+	cpi pointer, 2
+	breq CHECK_LINE2
+	cpi pointer, 3
+	breq CHECK_LINE3
+	cpi pointer, 4
+	breq CHECK_LINE4
+
+	CHECK_LINE1:
+		brne NO_MATCH2
+		rcall Z_LINE1
+		ld r0, Z 
+		cp key, r0
+		brne CHECK_LINE2
+		rjmp MATCH
 
 	CHECK_LINE2:
+		brne NO_MATCH2
 		rcall Z_LINE2
 		ld r0, Z 
 		cp key, r0
 		brne CHECK_LINE3
 		rjmp MATCH
 	CHECK_LINE3:
+		brne NO_MATCH2
 		rcall Z_LINE3
 		ld r0, Z 
 		cp key, r0
 		brne CHECK_LINE4
 		rjmp MATCH
 	CHECK_LINE4:
+		brne NO_MATCH2
 		rcall Z_LINE4
 		ld r0, Z 
 		cp key, r0
-		brne NO_MATCH
+		brne NO_MATCH2
 		rjmp MATCH
 
+	NO_MATCH2:
+		rjmp NO_MATCH
+
 MOVE_POINTER:
+	push cursor
 	mov temp, r0
 	cpi temp, 0xFA
 	breq POINTER_UP
 	cpi temp, 0xFB
 	breq POINTER_DOWN
-	rjmp NO_KEY
+	rjmp DONE_MOVE_CURSOR
 
 	POINTER_UP:
 		cpi pointer, 1
@@ -788,41 +832,45 @@ MOVE_POINTER:
 		rcall SET_POINTER_1
 		rcall DEL_POINTER_2
 		TO_NO_KEY:
-		rjmp NO_KEY
+		rjmp DONE_MOVE_CURSOR
 
 		CEK_UP_2:
 		cpi pointer, 2
 		brne CEK_UP_3
 		rcall SET_POINTER_2
 		rcall DEL_POINTER_3
-		rjmp NO_KEY
+		rjmp DONE_MOVE_CURSOR
 
 		CEK_UP_3:
 		rcall SET_POINTER_3
 		rcall DEL_POINTER_4
-		rjmp NO_KEY
+		rjmp DONE_MOVE_CURSOR
 
 	POINTER_DOWN:
 		cpi pointer, 4
-		breq NO_KEY
+		breq DONE_MOVE_CURSOR
 		inc pointer
 
 		cpi pointer, 4
 		brne CEK_DOWN_3
 		rcall SET_POINTER_4
 		rcall DEL_POINTER_3
-		rjmp NO_KEY
+		rjmp DONE_MOVE_CURSOR
 
 		CEK_DOWN_3:
 		cpi pointer, 3
 		brne CEK_DOWN_2
 		rcall SET_POINTER_3
 		rcall DEL_POINTER_2
-		rjmp NO_KEY
+		rjmp DONE_MOVE_CURSOR
 
 		CEK_DOWN_2:
 		rcall SET_POINTER_2
 		rcall DEL_POINTER_1
+		rjmp DONE_MOVE_CURSOR
+	DONE_MOVE_CURSOR:
+		pop cursor
+		rcall SET_CURSOR_POS
 		rjmp NO_KEY
 
 NO_MATCH:
@@ -850,8 +898,6 @@ NO_MATCH:
 
 	rjmp NO_KEY
 MATCH:
-	ldi temp, 0x0f
-	out PORT_LED, temp
 	inc score_satuan
 	mov temp, score_satuan
 	cpi temp, 0x3A
@@ -859,6 +905,7 @@ MATCH:
 	ldi temp, 0x30
 	mov score_satuan, temp
 	inc score_puluhan
+	rcall INC_LEVEL
 	mov temp, score_puluhan
 	cpi temp, 0x3A
 	brne DISP_SCORE
@@ -888,52 +935,113 @@ NO_KEY:
 	pop temp
 	reti
 
+INC_LEVEL:
+	mov temp, level
+	cpi temp, 0x37
+	breq CANT_INC_LEVEL
+	inc level
+	mov temp, level
+	
+	cpi temp, 0x30
+	breq LED_LEVEL_1
+	cpi temp, 0x31
+	breq LED_LEVEL_2
+	cpi temp, 0x32
+	breq LED_LEVEL_3
+	cpi temp, 0x33
+	breq LED_LEVEL_4
+	cpi temp, 0x34
+	breq LED_LEVEL_5
+	cpi temp, 0x35
+	breq LED_LEVEL_6
+	cpi temp, 0x36
+	breq LED_LEVEL_7
+	cpi temp, 0x37
+	breq LED_LEVEL_8
+
+	LED_LEVEL_1:
+	ldi led, 0x80
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_2:
+	ldi led, 0xC0
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_3:
+	ldi led, 0xE0
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_4:
+	ldi led, 0xF0
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_5:
+	ldi led, 0xF8
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_6:
+	ldi led, 0xFC
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_7:
+	ldi led, 0xFE
+	rjmp RETURN_INC_LEVEL
+
+	LED_LEVEL_8:
+	ldi led, 0xFF
+	rjmp RETURN_INC_LEVEL
+
+	RETURN_INC_LEVEL:
+		out PORT_LED, led
+	CANT_INC_LEVEL:
+		ret
+
 ; Pointer conf
 	DEL_POINTER_1:
-		ldi temp, 0x80
+		ldi cursor, 0x80
 		rcall SET_CURSOR_POS
 		ldi PA, 0x20
 		rcall WRITE_FAST
 		ret
 	DEL_POINTER_2:
-		ldi temp, 0xC0
+		ldi cursor, 0xC0
 		rcall SET_CURSOR_POS
 		ldi PA, 0x20
 		rcall WRITE_FAST
 		ret
 	DEL_POINTER_3:
-		ldi temp, 0x94
+		ldi cursor, 0x94
 		rcall SET_CURSOR_POS
 		ldi PA, 0x20
 		rcall WRITE_FAST
 		ret
 	DEL_POINTER_4:
-		ldi temp, 0xD4
+		ldi cursor, 0xD4
 		rcall SET_CURSOR_POS
 		ldi PA, 0x20
 		rcall WRITE_FAST
 		ret
 
 	SET_POINTER_1:
-		ldi temp, 0x80
+		ldi cursor, 0x80
 		rcall SET_CURSOR_POS
 		ldi PA, 0x3E
 		rcall WRITE_FAST
 		ret
 	SET_POINTER_2:
-		ldi temp, 0xC0
+		ldi cursor, 0xC0
 		rcall SET_CURSOR_POS
 		ldi PA, 0x3E
 		rcall WRITE_FAST
 		ret
 	SET_POINTER_3:
-		ldi temp, 0x94
+		ldi cursor, 0x94
 		rcall SET_CURSOR_POS
 		ldi PA, 0x3E
 		rcall WRITE_FAST
 		ret
 	SET_POINTER_4:
-		ldi temp, 0xD4
+		ldi cursor, 0xD4
 		rcall SET_CURSOR_POS
 		ldi PA, 0x3E
 		rcall WRITE_FAST
@@ -943,6 +1051,8 @@ DEAD:
 	ldi ZH, high(2*dead_message)
 	ldi ZL, low (2*dead_message)
 	rcall CLEAR_LCD
+	ldi cursor, 0x45
+	rcall SET_CURSOR_POS
 	rcall LOADBYTE
 	rcall ENDLESS_LOOP
 
