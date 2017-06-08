@@ -3,10 +3,10 @@
    <General>
       <Build>2005</Build>
       <Position>
-         <top>290</top>
-         <bottom>844</bottom>
-         <left>693</left>
-         <right>1359</right>
+         <top>42</top>
+         <bottom>596</bottom>
+         <left>1199</left>
+         <right>1865</right>
       </Position>
       <StayOnTop>1</StayOnTop>
       <Target>ATmega8515</Target>
@@ -129,7 +129,7 @@
             <Color>Red</Color>
             <Name>MASTERRACE</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>0</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -138,7 +138,7 @@
             <Color>Red</Color>
             <Name>DANK</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>1</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -147,7 +147,7 @@
             <Color>Yellow</Color>
             <Name>WELL</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>2</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -156,7 +156,7 @@
             <Color>Yellow</Color>
             <Name>GOOD</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>3</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -165,7 +165,7 @@
             <Color>Green</Color>
             <Name>NOPE</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>4</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -174,7 +174,7 @@
             <Color>Green</Color>
             <Name>NEWB</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>5</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -183,7 +183,7 @@
             <Color>Blue</Color>
             <Name>EZPZ</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>6</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -192,7 +192,7 @@
             <Color>Blue</Color>
             <Name>NOOB</Name>
             <PortPin>
-               <Port>PORTC</Port>
+               <Port>PORTB</Port>
                <Bit>7</Bit>
             </PortPin>
             <Invert>0</Invert>
@@ -206,35 +206,35 @@
          </Position>
          <PortMapping>
             <Strobe index="0">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>0</Bit>
             </Strobe>
             <Strobe index="1">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>1</Bit>
             </Strobe>
             <Strobe index="2">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>2</Bit>
             </Strobe>
             <Strobe index="3">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>3</Bit>
             </Strobe>
             <Input index="0">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>7</Bit>
             </Input>
             <Input index="1">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>6</Bit>
             </Input>
             <Input index="2">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>5</Bit>
             </Input>
             <Input index="3">
-               <Port>PORTE</Port>
+               <Port>PORTC</Port>
                <Bit>4</Bit>
             </Input>
          </PortMapping>

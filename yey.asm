@@ -15,6 +15,7 @@
 	.def temp2 = r17
 	.def temp3 = r20
 	.def PA    = r21
+	.def pointer = r22
  
 	.equ block1 = 0x60
 	.equ line1 	= 0x80 
@@ -80,7 +81,7 @@ INIT_TIMER:
 	out TIFR, temp
 	ldi temp, (1<<OCIE1B)
 	out TIMSK, temp
-	ldi temp, 0x0F
+	ldi temp, 0x06
 	out OCR1BH, temp
 	ldi temp, 0xFF
 	out OCR1BL, temp
@@ -102,7 +103,7 @@ INIT_GAMESETTING:
 	add char2, temp
 	add char3, temp
 
-rjmp ASK_LEVEL
+rjmp DISPLAY_WELCOME
 
 INIT_LCD:
 	cbi SETTING_A, RS_A ; CLR RS
@@ -203,7 +204,7 @@ WRITE_TEXT:
 	out PORT_LCD_A, PA
 	sbi SETTING_A, EN_A ; SETB EN
 	cbi SETTING_A, EN_A ; CLR EN
-	rcall DELAY_SHORT
+	rcall DELAY_MID
 	ret
 WRITE_FAST:
 	sbi SETTING_A, RS_A ; SETB RS
@@ -251,9 +252,7 @@ DISPLAY_WELCOME:
 	ldi ZH, high(2*welcome_message)
 	ldi ZL, low(2*welcome_message)
 	rcall LOADBYTE
-	rcall DELAY_LONG
-	rcall DELAY_LONG
- 
+
 	cbi SETTING_A, RS_A 		; disabling rs, so its a data
 	ldi temp2, 0b11000000  ; 1 bit pertama,rumusnya, 7 bit sisanya address DDRAM
 	out PORT_LCD_A, temp2
@@ -341,11 +340,14 @@ ASK_LEVEL:
 	ldi ZH, high(2*level_message)
 	ldi ZL, low (2*level_message)
 	rcall LOADBYTE
+
+	ldi temp2, 0x80
+	out PORT_LED, temp2
  
 	LOOP_ASK_LEVEL:
 		cbi SETTING_A, RS_A
-		ldi temp2, 0b11000000
-		out PORT_LCD_A, temp2
+		ldi temp3, 0b11000000
+		out PORT_LCD_A, temp3
 		sbi SETTING_A, EN_A
 		cbi SETTING_A, EN_A
  
@@ -355,18 +357,24 @@ ASK_LEVEL:
 		cpi temp, 1
 		brne END_ASK_LEVEL
 		inc level
+		mov temp, level
+		LOOP_LED_LEVEL:
+			dec temp
+			breq END_ASK_LEVEL
+			lsr temp2
+			rjmp LOOP_LED_LEVEL
+
+	END_ASK_LEVEL:
+		out PORT_LED, temp2
+		cpi temp, 2
+		brne LOOP_ASK_LEVEL
 		ldi temp, 0
- 
-		END_ASK_LEVEL:
-			cpi temp, 2
-			brne LOOP_ASK_LEVEL
-			ldi temp, 0
 GAME_START:
 	ldi temp, 0
 
 	rcall CLEAR_LCD
 	rcall CLEAR_LCD_2
-	
+
 	; Write name
 	ldi temp, 0x80
 	rcall SET_CURSOR_POS_2
@@ -393,22 +401,28 @@ GAME_START:
 	rcall WRITE_FAST_2
 	rcall WRITE_FAST_2
 
+	; Shift Line left 15 times
 	rcall SHIFT_LINE_LEFT
 	rcall LOAD_GAME_DATA
 	ldi temp3, 15
-	JAJAJA:
+	teamUeno: 
 		rcall SHIFT_LINE
 		dec temp3
-		brne JAJAJA
+		brne teamUeno
+
+	; Display pointer
+	ldi pointer, 1
+	ldi temp, 0x80
+	rcall SET_CURSOR_POS
+	ldi PA, 0x3E
+	rcall WRITE_FAST
  
-	ldi temp3, 10
+ 	; Game loop
 	LOOP_GAME_START:
-		dec temp3
-		breq END_GAME_START
 		rcall UPDATE_GAME_SCREEN
+		rcall SHIFT_LINE
 		rjmp LOOP_GAME_START
- 
-	END_GAME_START:
+
 	rjmp EXIT
  
 LOAD_GAME_DATA:
@@ -443,28 +457,25 @@ LOAD_GAME_DATA:
  
 UPDATE_GAME_SCREEN:
 	rcall Z_LINE1
-	ldi temp, 0b10000000
+	ldi temp, 0b10000001
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE
  
 	rcall Z_LINE2
-	ldi temp, 0b11000000
+	ldi temp, 0b11000001
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 
  
 	rcall Z_LINE3
-	ldi temp, 0b10010100
+	ldi temp, 0b10010101
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 
 	
 	rcall Z_LINE4
-	ldi temp, 0b11010100
+	ldi temp, 0b11010101
 	rcall SET_CURSOR_POS
 	rcall DISPLAY_LINE 	
 	
-	rcall DELAY_LONG
-
-	rcall SHIFT_LINE
 	ret
 
 	DISPLAY_LINE:
@@ -670,6 +681,12 @@ READ_KEY:
 KEY_FOUND: 				; pressed key is found 
 	lpm 				; read key code to R0
 	mov key, r0 		; countinue key processing
+
+	ldi temp, 0x0F
+	or temp, r0
+	cpi temp, 0xFF
+	breq MOVE_POINTER
+
 	rcall Z_LINE1
 	ld r0, Z 
 	cp key, r0
@@ -677,25 +694,78 @@ KEY_FOUND: 				; pressed key is found
 	rjmp MATCH
 
 	CHECK_LINE2:
-	rcall Z_LINE2
-	ld r0, Z 
-	cp key, r0
-	brne CHECK_LINE3
-	rjmp MATCH
-
+		rcall Z_LINE2
+		ld r0, Z 
+		cp key, r0
+		brne CHECK_LINE3
+		rjmp MATCH
 	CHECK_LINE3:
-	rcall Z_LINE3
-	ld r0, Z 
-	cp key, r0
-	brne CHECK_LINE4
-	rjmp MATCH
-
+		rcall Z_LINE3
+		ld r0, Z 
+		cp key, r0
+		brne CHECK_LINE4
+		rjmp MATCH
 	CHECK_LINE4:
-	rcall Z_LINE4
-	ld r0, Z 
-	cp key, r0
-	brne NO_MATCH
-	rjmp MATCH
+		rcall Z_LINE4
+		ld r0, Z 
+		cp key, r0
+		brne NO_MATCH
+		rjmp MATCH
+
+MOVE_POINTER:
+	mov temp, r0
+	cpi temp, 0xFA
+	breq POINTER_UP
+	cpi temp, 0xFB
+	breq POINTER_DOWN
+	rjmp NO_KEY
+
+	POINTER_UP:
+		cpi pointer, 1
+		breq TO_NO_KEY
+		dec pointer
+		
+		cpi pointer, 1
+		brne CEK_UP_2
+		rcall SET_POINTER_1
+		rcall DEL_POINTER_2
+		TO_NO_KEY:
+		rjmp NO_KEY
+
+		CEK_UP_2:
+		cpi pointer, 2
+		brne CEK_UP_3
+		rcall SET_POINTER_2
+		rcall DEL_POINTER_3
+		rjmp NO_KEY
+
+		CEK_UP_3:
+		rcall SET_POINTER_3
+		rcall DEL_POINTER_4
+		rjmp NO_KEY
+
+	POINTER_DOWN:
+		cpi pointer, 4
+		breq NO_KEY
+		inc pointer
+
+		cpi pointer, 4
+		brne CEK_DOWN_3
+		rcall SET_POINTER_4
+		rcall DEL_POINTER_3
+		rjmp NO_KEY
+
+		CEK_DOWN_3:
+		cpi pointer, 3
+		brne CEK_DOWN_2
+		rcall SET_POINTER_3
+		rcall DEL_POINTER_2
+		rjmp NO_KEY
+
+		CEK_DOWN_2:
+		rcall SET_POINTER_2
+		rcall DEL_POINTER_1
+		rjmp NO_KEY
 
 NO_MATCH:
 	ldi temp, 0xC0
@@ -721,7 +791,6 @@ NO_MATCH:
 	rcall WRITE_FAST_2
 
 	rjmp NO_KEY
-
 MATCH:
 	ldi temp, 0x0f
 	out PORT_LED, temp
@@ -748,7 +817,6 @@ MATCH:
 	rcall WRITE_FAST_2
 	mov PA, score_satuan
 	rcall WRITE_FAST_2	
-
 NO_KEY:
 	clr temp
 	out TCNT1L, temp
@@ -761,7 +829,58 @@ NO_KEY:
 	out SREG, temp
 	pop temp
 	reti
-		
+
+; Pointer conf
+	DEL_POINTER_1:
+		ldi temp, 0x80
+		rcall SET_CURSOR_POS
+		ldi PA, 0x20
+		rcall WRITE_FAST
+		ret
+	DEL_POINTER_2:
+		ldi temp, 0xC0
+		rcall SET_CURSOR_POS
+		ldi PA, 0x20
+		rcall WRITE_FAST
+		ret
+	DEL_POINTER_3:
+		ldi temp, 0x94
+		rcall SET_CURSOR_POS
+		ldi PA, 0x20
+		rcall WRITE_FAST
+		ret
+	DEL_POINTER_4:
+		ldi temp, 0xD4
+		rcall SET_CURSOR_POS
+		ldi PA, 0x20
+		rcall WRITE_FAST
+		ret
+
+	SET_POINTER_1:
+		ldi temp, 0x80
+		rcall SET_CURSOR_POS
+		ldi PA, 0x3E
+		rcall WRITE_FAST
+		ret
+	SET_POINTER_2:
+		ldi temp, 0xC0
+		rcall SET_CURSOR_POS
+		ldi PA, 0x3E
+		rcall WRITE_FAST
+		ret
+	SET_POINTER_3:
+		ldi temp, 0x94
+		rcall SET_CURSOR_POS
+		ldi PA, 0x3E
+		rcall WRITE_FAST
+		ret
+	SET_POINTER_4:
+		ldi temp, 0xD4
+		rcall SET_CURSOR_POS
+		ldi PA, 0x3E
+		rcall WRITE_FAST
+		ret
+	
 DEAD:
 	ldi ZH, high(2*dead_message)
 	ldi ZL, low (2*dead_message)
@@ -791,7 +910,6 @@ ENDLESS_LOOP:	rjmp ENDLESS_LOOP
 ;data
 	welcome_message:
 		.db "SELAMAT DATANG DI"
-		.db 0
 		.db "NUMBER TILES !1!"
 		.db 0
 	askname_message:
