@@ -88,7 +88,7 @@ INIT_TIMER:
 	out TIFR, temp
 	ldi temp, (1<<OCIE1B)
 	out TIMSK, temp
-	ldi temp, 0x3F
+	ldi temp, 0x5F
 	out OCR1BH, temp
 	ldi temp, 0xFF
 	out OCR1BL, temp
@@ -413,7 +413,9 @@ ASK_LEVEL:
 
 	ldi led, (1<<7)
 	out PORT_LED, led
- 
+
+ 	rcall INIT_TIMER
+
 	LOOP_ASK_LEVEL:
 		cbi SETTING_A, RS_A
 		ldi cursor, 0b11000000
@@ -496,7 +498,7 @@ GAME_START:
 	rcall WRITE_FAST
  
  	; initiate timer interrupt
-	rcall INIT_TIMER
+	
 
  	; Game loop
 	LOOP_GAME_START:
@@ -1048,10 +1050,10 @@ INC_LEVEL:
 		ret
 	
 DEAD:
+	rcall CLEAR_LCD
 	ldi ZH, high(2*dead_message)
 	ldi ZL, low (2*dead_message)
-	rcall CLEAR_LCD
-	ldi cursor, 0x45
+	ldi cursor, 0xC5
 	rcall SET_CURSOR_POS
 	rcall LOADBYTE
 	rcall ENDLESS_LOOP
