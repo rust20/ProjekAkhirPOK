@@ -24,6 +24,7 @@
 	.equ line4 	= 0xe0
 
 	.equ screenwidth = 20
+	.equ startdebug = ASK_LEVEL
 
 	.equ DDR_LED 	= DDRB
 	.equ PORT_LED 	= PORTB
@@ -72,6 +73,7 @@ INIT_INTERRUPT:
 	out MCUCR, temp
 	ldi temp, 0b11000000
 	out GICR, temp
+
 INIT_TIMER:
 	ldi temp, (1<<CS10)
 	out TCCR1B, temp
@@ -103,7 +105,7 @@ INIT_GAMESETTING:
 	add char2, temp
 	add char3, temp
 
-rjmp DISPLAY_WELCOME
+rjmp startdebug
 
 INIT_LCD:
 	cbi SETTING_A, RS_A ; CLR RS
@@ -221,6 +223,55 @@ WRITE_FAST_2:
 	out PORT_LED, level
 	ret
 
+LEVEL_DELAY:
+	mov temp level
+	subi temp, 0x30
+
+	cpi temp, 7
+	brne DELAY_6
+	rcall DELAY_LONG
+	rcall DELAY_LONG
+	ret
+
+	DELAY_6:
+	cpi temp, 6
+	brne DELAY_5
+	rcall DELAY_LONG
+	rcall DELAY_MID
+	ret
+
+	DELAY_5:
+	cpi temp, 5
+	brne DELAY_4
+	rcall DELAY_LONG
+	rcall DELAY_LONG
+	ret
+
+	DELAY_4:
+	cpi temp, 4
+	brne DELAY_3
+	rcall DELAY_MID
+	rcall DELAY_MID
+	ret
+
+	DELAY_3:
+	cpi temp, 3
+	brne DELAY_2
+	rcall DELAY_MID
+	rcall DELAY_SHORT
+	ret
+
+	DELAY_2:
+	cpi temp, 2
+	brne DELAY_1
+	rcall DELAY_SHORT
+	rcall DELAY_LONG
+	ret
+
+	DELAY_1: 
+	ret
+
+	cpi temp, 
 DELAY_SHORT:
 	ldi  r18, 6
 	ldi  r19, 49
@@ -284,7 +335,7 @@ ASK_NAME:
 		cpi temp, 1
 		brne ELSE1
 		inc char1
-		ldi temp, 0
+		ldi temp, 0S
  
 		ELSE1:
 			cpi temp, 2 	
@@ -341,7 +392,7 @@ ASK_LEVEL:
 	ldi ZL, low (2*level_message)
 	rcall LOADBYTE
 
-	ldi temp2, 0x80
+	ldi temp2, (1<<7)
 	out PORT_LED, temp2
  
 	LOOP_ASK_LEVEL:
@@ -356,16 +407,23 @@ ASK_LEVEL:
  
 		cpi temp, 1
 		brne END_ASK_LEVEL
-		inc level
 		mov temp, level
-		LOOP_LED_LEVEL:
-			dec temp
-			breq END_ASK_LEVEL
-			lsr temp2
-			rjmp LOOP_LED_LEVEL
+		cpi temp, 0x37
+		breq MAX_LEVEL
+		inc level
+		lsr temp2
+		out PORT_LED, temp2
+		ldi temp, 0
+		rjmp END_ASK_LEVEL
+
+		MAX_LEVEL:
+			ldi temp, 0x30
+			mov level, temp
+			ldi temp2, 1<<7
+
 
 	END_ASK_LEVEL:
-		out PORT_LED, temp2
+		rcall DELAY_MID
 		cpi temp, 2
 		brne LOOP_ASK_LEVEL
 		ldi temp, 0
@@ -486,7 +544,7 @@ UPDATE_GAME_SCREEN:
 			ld temp2, Z+
 			mov PA, temp2
 			rcall WRITE_FAST
-			rcall DELAY_SHORT
+			rcall LEVEL_DELAY
 			rjmp LOOP_DISPLAY_LINE
 	 
 		END_DISPLAY_LINE:
