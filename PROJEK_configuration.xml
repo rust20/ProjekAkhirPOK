@@ -3,10 +3,10 @@
    <General>
       <Build>2005</Build>
       <Position>
-         <top>42</top>
-         <bottom>596</bottom>
-         <left>1199</left>
-         <right>1865</right>
+         <top>427</top>
+         <bottom>981</bottom>
+         <left>770</left>
+         <right>1436</right>
       </Position>
       <StayOnTop>1</StayOnTop>
       <Target>ATmega8515</Target>
@@ -59,7 +59,7 @@
          </DisplayConfig>
          <PortMapping>
             <DataPort>
-               <Port>PORTB</Port>
+               <Port>PORTA</Port>
                <HighNibble>bit 4..7</HighNibble>
                <LowNibble>N.C.</LowNibble>
             </DataPort>
